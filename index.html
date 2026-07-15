@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Switch Control</title>
+    <!-- Nhúng thư viện Firebase v8 -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-color: #333333;
+            --primary-color: #0084ff;
+            --accent-on: #4cd964;
+            --accent-off: #8e8e93;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 450px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin: 0 0 5px 0;
+            color: var(--primary-color);
+        }
+
+        .header p {
+            margin: 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+            transition: border 0.3s;
+        }
+
+        input:focus {
+            border-color: var(--primary-color);
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background-color: #0066cc;
+        }
+
+        .switch-control {
+            display: none; /* Ẩn cho tới khi nhập Device ID */
+        }
+
+        .device-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .device-row:last-child {
+            border-bottom: none;
+        }
+
+        .device-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .device-name {
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .device-name span {
+            cursor: pointer;
+        }
+
+        .device-name span:hover::after {
+            content: " ✏️";
+            font-size: 12px;
+        }
+
+        .device-status {
+            font-size: 14px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        /* Nút gạt Toggle Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--accent-off);
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        input:checked + .slider {
+            background-color: var(--accent-on);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .badge {
+            background-color: #e2e3e5;
+            color: #383d41;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-top: 5px;
+            align-self: flex-start;
+        }
+        
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Smart Switch IoT</h1>
+        <p>Hệ thống điều khiển thiết bị thông minh qua Firebase</p>
+    </div>
+
+    <!-- KHUNG NHẬP DEVICE ID -->
+    <div class="card">
+        <h3 style="margin-top:0; margin-bottom:12px;">Kết nối thiết bị</h3>
+        <div class="input-group">
+            <input type="text" id="deviceIdInput" placeholder="Nhập Device ID (Ví dụ: 240AC4...)" />
+            <button onclick="connectDevice()">Kết nối</button>
+        </div>
+        <div id="connectionBadge" class="badge" style="display:none;">Chưa kết nối</div>
+    </div>
+
+    <!-- KHUNG BẬT TẮT THIẾT BỊ -->
+    <div class="card switch-control" id="controlPanel">
+        <div class="device-row">
+            <div class="device-info">
+                <div class="device-name">
+                    <span id="name1" onclick="renameDevice('relay1')">Thiết bị 1</span>
+                </div>
+                <div class="device-status" id="statusLabel1">Đang tắt</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="switch1" onchange="toggleRelay('relay1', this.checked)">
+                <span class="slider"></span>
+            </label>
+        </div>
+
+        <div class="device-row">
+            <div class="device-info">
+                <div class="device-name">
+                    <span id="name2" onclick="renameDevice('relay2')">Thiết bị 2</span>
+                </div>
+                <div class="device-status" id="statusLabel2">Đang tắt</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="switch2" onchange="toggleRelay('relay2', this.checked)">
+                <span class="slider"></span>
+            </label>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 1. THAY THẾ LINK FIREBASE CỦA BẠN TẠI ĐÂY ---
+    const firebaseConfig = {
+        databaseURL: "https://smart-switch-2k-default-rtdb.asia-southeast1.firebasedatabase.app"
+    };
+
+    // Khởi tạo Firebase
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    
+    let currentDeviceId = "";
+
+    // Hàm kết nối tới Device ID
+    function connectDevice() {
+        const inputId = document.getElementById("deviceIdInput").value.trim();
+        if (!inputId) {
+            alert("Vui lòng nhập Device ID!");
+            return;
+        }
+
+        currentDeviceId = inputId;
+        
+        // Kiểm tra xem thiết bị có tồn tại trên database không
+        database.ref('devices/' + currentDeviceId).once('value', snapshot => {
+            if (snapshot.exists()) {
+                // Hiển thị khung điều khiển
+                document.getElementById("controlPanel").style.display = "block";
+                
+                const badge = document.getElementById("connectionBadge");
+                badge.style.display = "inline-block";
+                badge.innerText = "Đã kết nối: " + currentDeviceId;
+                badge.className = "badge connected";
+
+                // Lắng nghe dữ liệu thay đổi realtime từ Firebase
+                setupRealtimeListener();
+            } else {
+                alert("Không tìm thấy Thiết bị này trên Firebase! Hãy kiểm tra lại mã ID hoặc đảm bảo mạch ESP32 đã kết nối WiFi thành công.");
+            }
+        });
+    }
+
+    // Hàm lắng nghe đồng bộ trạng thái Realtime
+    function setupRealtimeListener() {
+        // Thiết bị 1
+        database.ref('devices/' + currentDeviceId + '/relay1').on('value', snapshot => {
+            const data = snapshot.val();
+            if (data) {
+                document.getElementById("name1").innerText = data.name || "Thiết bị 1";
+                const isOn = data.status === 1;
+                document.getElementById("switch1").checked = isOn;
+                document.getElementById("statusLabel1").innerText = isOn ? "Đang bật" : "Đang tắt";
+                document.getElementById("statusLabel1").style.color = isOn ? "var(--accent-on)" : "#888";
+            }
+        });
+
+        // Thiết bị 2
+        database.ref('devices/' + currentDeviceId + '/relay2').on('value', snapshot => {
+            const data = snapshot.val();
+            if (data) {
+                document.getElementById("name2").innerText = data.name || "Thiết bị 2";
+                const isOn = data.status === 1;
+                document.getElementById("switch2").checked = isOn;
+                document.getElementById("statusLabel2").innerText = isOn ? "Đang bật" : "Đang tắt";
+                document.getElementById("statusLabel2").style.color = isOn ? "var(--accent-on)" : "#888";
+            }
+        });
+    }
+
+    // Hàm điều khiển Bật/Tắt gửi lên Firebase
+    function toggleRelay(relayKey, isChecked) {
+        if (!currentDeviceId) return;
+        const value = isChecked ? 1 : 0;
+        database.ref('devices/' + currentDeviceId + '/' + relayKey + '/status').set(value);
+    }
+
+    // Hàm đổi tên Thiết bị trực tiếp trên Web
+    function renameDevice(relayKey) {
+        if (!currentDeviceId) return;
+        const currentName = document.getElementById(relayKey === 'relay1' ? "name1" : "name2").innerText;
+        const newName = prompt("Nhập tên mới cho thiết bị:", currentName);
+        if (newName && newName.trim() !== "") {
+            database.ref('devices/' + currentDeviceId + '/' + relayKey + '/name').set(newName.trim());
+        }
+    }
+</script>
+
+</body>
+</html>
