@@ -259,15 +259,31 @@
     
     let currentDeviceId = "";
 
-    // Hàm kết nối tới Device ID
+    // TỰ ĐỘNG CHẠY KHI MỞ TRANG WEB: Kiểm tra xem có ID trên đường link không
+    window.onload = function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const deviceIdParam = urlParams.get('id'); // Lấy mã sau chữ ?id=
+
+        if (deviceIdParam) {
+            // Nếu có ID trên link, tự động điền vào ô nhập và tự kết nối luôn
+            document.getElementById("deviceIdInput").value = deviceIdParam;
+            connectDeviceWithId(deviceIdParam);
+        }
+    }
+
+    // Hàm kết nối khi nhấn nút thủ công trên giao diện
     function connectDevice() {
         const inputId = document.getElementById("deviceIdInput").value.trim();
         if (!inputId) {
             alert("Vui lòng nhập Device ID!");
             return;
         }
+        connectDeviceWithId(inputId);
+    }
 
-        currentDeviceId = inputId;
+    // Hàm xử lý kết nối chính
+    function connectDeviceWithId(id) {
+        currentDeviceId = id;
         
         // Kiểm tra xem thiết bị có tồn tại trên database không
         database.ref('devices/' + currentDeviceId).once('value', snapshot => {
@@ -277,13 +293,13 @@
                 
                 const badge = document.getElementById("connectionBadge");
                 badge.style.display = "inline-block";
-                badge.innerText = "Đã kết nối: " + currentDeviceId;
+                badge.innerText = "Đã kết nối thiết bị: " + currentDeviceId;
                 badge.className = "badge connected";
 
                 // Lắng nghe dữ liệu thay đổi realtime từ Firebase
                 setupRealtimeListener();
             } else {
-                alert("Không tìm thấy Thiết bị này trên Firebase! Hãy kiểm tra lại mã ID hoặc đảm bảo mạch ESP32 đã kết nối WiFi thành công.");
+                alert("Không tìm thấy Thiết bị này trên hệ thống! Vui lòng kiểm tra lại mã QR hoặc liên hệ hỗ trợ.");
             }
         });
     }
